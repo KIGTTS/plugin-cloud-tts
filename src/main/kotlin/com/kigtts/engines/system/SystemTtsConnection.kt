@@ -8,7 +8,6 @@ import com.kigtts.plugin.android.AndroidPluginEnvironment
 import com.kigtts.plugin.api.*
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.Flow
-import java.util.Locale
 
 interface SystemTtsConnection {
     fun voices(): List<VoiceInfo>
@@ -21,9 +20,7 @@ internal class AndroidSystemTtsConnection(private val environment: AndroidPlugin
         VoiceInfo(it.name, it.name, it.locale.toLanguageTag(), if (it.isNetworkConnectionRequired) "需要网络" else "本地声音")
     }
     override fun synthesize(request: TtsRequest): Flow<PcmAudio> {
-        if (engine.setLanguage(Locale.forLanguageTag(request.language)) < 0)
-            throw EngineException(EngineError.NOT_CONFIGURED, "系统 TTS 未安装 ${request.language} 的语音数据")
-        request.voiceId?.let { id -> engine.voices.firstOrNull { it.name == id }?.let { engine.voice = it } }
+        // The chosen Android service owns its default voice/language; do not override either.
         engine.setSpeechRate(request.rate)
         return systemAudioStream(environment, engine, request.text)
     }

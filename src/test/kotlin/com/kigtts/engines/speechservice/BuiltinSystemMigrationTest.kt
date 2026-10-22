@@ -73,7 +73,7 @@ class BuiltinSystemMigrationTest {
         val synthesis = ServiceSynthesis(options, broker, system)
         synthesis.control(TtsControl(TtsControlOperation.PREPARE))
         val events = synthesis.synthesize(TtsRequest("hello")).toList()
-        assertEquals(0, commands); assertEquals("fallback.voice", used.single().voiceId)
+        assertEquals(0, commands); assertNull(used.single().voiceId)
         assertEquals(1, events.count { it is SynthesisEvent.Started }); assertEquals(1, events.count { it is SynthesisEvent.Finished })
         synthesis.close(); assertEquals(1, closed)
     }
@@ -92,7 +92,8 @@ class BuiltinSystemMigrationTest {
         }
         val service = SpeechServicePlugin(); service.attach(environment)
         val page = service.page("packs", PluginContext("", ""))!!
-        assertEquals(listOf("系统声音"), page.management!!.items.map { it.title })
+        assertEquals(listOf("系统默认声音"), page.management!!.items.map { it.title })
+        assertEquals("系统语音合成", page.management!!.items.single().subtitle)
         assertFalse(page.management!!.filters.any { it.id == LEGACY_SYSTEM_PROVIDER })
         assertEquals(listOf("manager", "packs"), service.contributions.settingsEntries.map { it.id })
         service.close()

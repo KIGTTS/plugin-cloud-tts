@@ -26,7 +26,7 @@ internal class VoiceLibraryPages(private val settings: ServiceSettings, private 
                     if (pack.exportable && entry.provider.enabled) actions += PageAction(packAction("pack-export", entry), "导出语音包", PluginIcon.EXPORT)
                     if (pack.deletable && entry.provider.enabled) actions += PageAction(packAction("pack-delete", entry), "删除语音包", PluginIcon.CLOSE)
                     ManagementItem(entry.key, pack.metadata.name,
-                        entry.provider.name + (if (entry.provider.enabled) "" else " · 引擎已停用") + if (pack.metadata.remark.isBlank()) "" else " · ${pack.metadata.remark}", PluginIcon.SPEAKER,
+                        if (entry.provider.pluginId == SYSTEM_PROVIDER) "系统语音合成" else entry.provider.name + (if (entry.provider.enabled) "" else " · 引擎已停用") + if (pack.metadata.remark.isBlank()) "" else " · ${pack.metadata.remark}", PluginIcon.SPEAKER,
                         pack.avatarPath?.let { PluginResource(it, entry.provider.pluginId) },
                         selected = if (entry.provider.pluginId == SYSTEM_PROVIDER) settings.provider == null
                             else settings.provider == entry.provider.pluginId && settings.voice in pack.voiceIds,
@@ -40,7 +40,7 @@ internal class VoiceLibraryPages(private val settings: ServiceSettings, private 
         val pack = entry.pack
         if (!entry.provider.enabled) return PluginPage(id, pack.metadata.name, listOf(PageBlock.Notice("引擎已停用。启用后可使用、编辑和导出语音包。"), PageBlock.Text(pack.metadata.remark)))
         val actions = mutableListOf(PageAction(packAction("pack-use", entry), "使用语音包", PluginIcon.SPEAKER))
-        if (owner == SYSTEM_PROVIDER) actions += PageAction("refresh/${encodeId(owner)}", "刷新系统声音列表", PluginIcon.INFO)
+        if (pack.parameters.isNotEmpty()) actions += PageAction(packAction("pack-settings", entry), "音频设置", PluginIcon.SETTINGS)
         if (pack.editable) actions += listOf(PageAction(packAction("pack-name", entry), "修改名称", PluginIcon.EDIT),
             PageAction(packAction("pack-remark", entry), "修改备注", PluginIcon.TEXT), PageAction(packAction("pack-avatar", entry), "更换头像", PluginIcon.IMAGE))
         if (entry.provider.info.importsVoicePacks) actions += PageAction(packAction("pack-update", entry), "更新语音包", PluginIcon.ADD)
@@ -48,10 +48,11 @@ internal class VoiceLibraryPages(private val settings: ServiceSettings, private 
         if (pack.deletable) actions += PageAction(packAction("pack-delete", entry), "删除语音包", PluginIcon.CLOSE)
         val voices = entry.provider.info.voices.filter { it.id in pack.voiceIds }.distinctBy { it.id }.map { voice ->
             ManagementItem(voice.id, voice.name, voice.language, PluginIcon.SPEAKER,
-                selected = if (owner == SYSTEM_PROVIDER) settings.provider == null && settings.systemVoice == voice.id else settings.provider == owner && settings.voice == voice.id,
-                primaryAction = "voice/${encodeId(owner)}/${encodeId(voice.id)}")
+                selected = settings.provider == owner && settings.voice == voice.id,
+                primaryAction = "voice/${encodeId(owner)}/${encodeId(voice.id)}",
+                actions = if (pack.parameters.isEmpty()) emptyList() else listOf(PageAction(packAction("pack-settings", entry), "音频设置", PluginIcon.SETTINGS)))
         }
         return PluginPage(id, pack.metadata.name, (if (pack.metadata.remark.isBlank()) emptyList() else listOf(PageBlock.Text(pack.metadata.remark))) +
-            PageBlock.Actions(actions), ManagementList("pack-voices", voices, emptyText = "刷新后选择系统声音"))
+            PageBlock.Actions(actions), if (owner == SYSTEM_PROVIDER) null else ManagementList("pack-voices", voices))
     }
 }

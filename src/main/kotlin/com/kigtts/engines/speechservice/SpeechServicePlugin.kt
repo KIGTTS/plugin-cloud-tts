@@ -8,7 +8,7 @@ import java.util.Base64
 
 class SpeechServicePlugin : KigPlugin {
     override val descriptor = PluginDescriptor("service.speech-synthesis", "语音合成服务",
-        "选择朗读声音，管理语音包", version = "0.8.0", license = "GPL-3.0-only")
+        "选择朗读声音，管理语音包", version = "0.8.1", license = "GPL-3.0-only")
     private lateinit var environment: AndroidPluginEnvironment
     private lateinit var settings: ServiceSettings
     private lateinit var broker: SpeechBroker
@@ -22,7 +22,7 @@ class SpeechServicePlugin : KigPlugin {
         this.environment = environment as AndroidPluginEnvironment
         broker = requireNotNull(environment.speechBroker) { "宿主未授予语音合成服务能力" }
         settings = ServiceSettings(environment.storage)
-        system = SystemSpeechEngine(this.environment, settings = { settings.language to 1f })
+        system = SystemSpeechEngine(this.environment)
         facade = ServiceSynthesis(settings, broker, system)
         val library = VoiceLibrary(environment.storage)
         libraryPages = VoiceLibraryPages(settings, library, ::providers)
@@ -72,7 +72,7 @@ class SpeechServicePlugin : KigPlugin {
         return when (pieces[0]) {
             "resident" -> { settings.resident = context.inputs["checked"]?.toBooleanStrictOrNull() ?: !settings.resident; settings.save(); facade.settingsChanged(); PluginOutcome.RefreshUi }
             "activate" -> PluginOutcome.SelectTtsService(descriptor.id)
-            "sounds" -> { if (pieces.size == 1) system.refreshVoices(); PluginOutcome.OpenPage("voices/${pieces.getOrNull(1) ?: "0"}") }
+            "sounds" -> PluginOutcome.OpenPage("packs")
             "system-default" -> { settings.provider = null; settings.voice = null; settings.systemVoice = null; settings.save(); PluginOutcome.RefreshUi }
             "system" -> { settings.provider = null; settings.voice = null; settings.save(); PluginOutcome.RefreshUi }
             "engine" -> PluginOutcome.OpenPage("provider/${pieces[1]}/${pieces.getOrNull(2) ?: "0"}")
@@ -84,8 +84,7 @@ class SpeechServicePlugin : KigPlugin {
             }
             "voice" -> {
                 if (id == SYSTEM_PROVIDER) {
-                    val chosen = system.info.voices.first { it.id == voice }
-                    settings.systemVoice = voice; settings.language = chosen.language; settings.provider = null; settings.voice = null; settings.save()
+                    settings.systemVoice = null; settings.provider = null; settings.voice = null; settings.save()
                     return PluginOutcome.RefreshUi
                 }
                 if (providers().first { it.pluginId == id }.info.managesVoices)
@@ -109,15 +108,10 @@ class SpeechServicePlugin : KigPlugin {
                 if (settings.provider == id) { settings.voice = providers().firstOrNull { it.pluginId == id }?.info?.selectedVoiceId; settings.save() }
                 PluginOutcome.RefreshUi
             }
-            "rate" -> PluginOutcome.TextInput("语速（0.25–4）", "save-rate", settings.rate.toString())
+            "rate" -> PluginOutcome.Controls("语速", listOf(PluginControl.Slider("语速", "save-rate", settings.rate, .25f, 4f, suffix = "×")))
             "save-rate" -> {
                 val value = context.inputs["value"]?.toFloatOrNull(); require(value != null && value.isFinite() && value in .25f..4f)
-                settings.rate = value; settings.save(); PluginOutcome.RefreshUi
-            }
-            "language" -> PluginOutcome.TextInput("系统声音语言", "save-language", settings.language)
-            "save-language" -> {
-                val value = context.inputs["value"].orEmpty().trim(); require(value.matches(Regex("[a-zA-Z]{2,3}(-[a-zA-Z0-9]{2,8})*")))
-                settings.language = value; settings.systemVoice = null; settings.save(); PluginOutcome.RefreshUi
+                settings.rate = value; settings.save(); PluginOutcome.NoAction
             }
             else -> PluginOutcome.Message("未知语音合成服务操作")
         }

@@ -54,7 +54,7 @@ class ServiceSynthesisTest {
             val system = System()
             val options = settings().also { it.systemVoice = "system.voice" }
             ServiceSynthesis(options, broker, system).synthesize(TtsRequest("你好")).toList()
-            assertEquals("system.voice", system.requests.single().voiceId)
+            assertNull(system.requests.single().voiceId)
             assertTrue(broker.requests.isEmpty())
         }
     }

@@ -22,20 +22,19 @@ class SpeechServicePagesTest {
         val settings = settings().apply { provider = source.pluginId; voice = this@SpeechServicePagesTest.voice.id; resident = true }
         val pages = SpeechServicePages(settings) { listOf(system, source) }
         val page = pages.page("manager", true)!!
-        assertTrue(page.blocks.isEmpty())
-        val items = page.management!!.items
-        assertEquals(listOf("声音", "语速", "语音包", "系统声音语言", "保持加载"), items.map { it.title })
-        assertEquals("清朗", items.first().subtitle)
-        assertEquals("sounds", items.first().primaryAction)
-        assertEquals(ManagementToggle(true, "resident"), items.last().toggle)
-        assertEquals(3, items.map { it.group }.distinct().size)
+        val items = page.blocks.filterIsInstance<PageBlock.Group>().flatMap { it.children }
+        val sound = items.filterIsInstance<PageBlock.Input>().single()
+        assertEquals("声音", sound.title); assertEquals("清朗", sound.value); assertEquals("library", sound.actionId)
+        assertEquals(1f, items.filterIsInstance<PageBlock.Slider>().single().control.value)
+        assertTrue(items.filterIsInstance<PageBlock.Toggle>().single().checked)
         assertEquals(listOf("activate"), pages.page("manager", false)!!.blocks.filterIsInstance<PageBlock.Actions>().flatMap { it.actions }.map { it.id })
     }
 
     @Test fun unavailableVoiceFallsBackAndInactiveProvidersCannotBeSelected() {
         val settings = settings().apply { provider = source.pluginId; voice = this@SpeechServicePagesTest.voice.id }
         val pages = SpeechServicePages(settings) { listOf(system, source.copy(enabled = false)) }
-        assertEquals("系统默认声音", pages.page("manager", true)!!.management!!.items.first().subtitle)
+        assertEquals("系统默认声音", pages.page("manager", true)!!.blocks.filterIsInstance<PageBlock.Group>()
+            .flatMap { it.children }.filterIsInstance<PageBlock.Input>().single().value)
         assertEquals(listOf("system-default"), pages.page("voices", true)!!.management!!.items.map { it.id })
     }
 
@@ -56,9 +55,9 @@ class SpeechServicePagesTest {
         val duplicated = system.copy(info = TtsInfo(voices = listOf(voice, voice.copy(language = "en-US"))))
         val pages = SpeechServicePages(settings()) { listOf(duplicated, source) }
         val page = pages.page("voices/0", true)!!
-        assertEquals(3, page.management!!.items.size)
-        assertEquals(3, page.management!!.items.map { it.id }.distinct().size)
-        assertEquals(languageName("zh-CN"), page.management!!.items.single { it.id == "$SYSTEM_PROVIDER/${voice.id}" }.title)
+        assertEquals(2, page.management!!.items.size)
+        assertEquals(2, page.management!!.items.map { it.id }.distinct().size)
+        assertEquals("系统默认声音", page.management!!.items.single { it.id == "system-default" }.title)
         assertEquals("", languageName("und"))
         PluginSnapshot(PluginDescriptor("test.service", "服务", "test"), PluginContributions(), listOf(page))
     }

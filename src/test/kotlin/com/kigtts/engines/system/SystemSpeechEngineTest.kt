@@ -39,19 +39,20 @@ class SystemSpeechEngineTest {
     }
     @Test fun prepareAndVoiceRefreshReuseConnectionUntilExplicitRelease() = runBlocking {
         val connections = mutableListOf<Connection>()
-        val engine = SystemSpeechEngine(environment(), { "zh-CN" to 1.5f }, { Connection().also { connections += it } })
+        val engine = SystemSpeechEngine(environment(), { 1.5f }, { Connection().also { connections += it } })
         engine.control(TtsControl(TtsControlOperation.PREPARE))
-        assertEquals(1, engine.refreshVoices().size)
-        engine.synthesize(TtsRequest("hello", rate = 2f)).toList()
+        assertTrue(engine.refreshVoices().isEmpty())
+        engine.synthesize(TtsRequest("hello", rate = 2f, voiceId = "old-system-voice")).toList()
         engine.synthesize(TtsRequest("again")).toList()
         assertEquals(1, connections.size); assertEquals(3f, connections.single().requests.first().rate)
+        assertNull(connections.single().requests.first().voiceId)
         engine.control(TtsControl(TtsControlOperation.RELEASE)); assertEquals(1, connections.single().closed)
         engine.synthesize(TtsRequest("next")).toList(); assertEquals(2, connections.size)
         engine.close(); assertEquals(1, connections.last().closed)
     }
     @Test fun firstAudioStreamsBeforeRequestFinishesAndCancelKeepsConnectionReusable() = runBlocking {
         val connection = Connection().also { it.gate = CompletableDeferred() }; var initialized = 0
-        val engine = SystemSpeechEngine(environment(), { "zh-CN" to 1f }, { initialized++; connection })
+        val engine = SystemSpeechEngine(environment(), { 1f }, { initialized++; connection })
         val first = CompletableDeferred<Unit>()
         val job = launch { engine.synthesize(TtsRequest("first. " + "x".repeat(200))).collect {
             if (it is SynthesisEvent.Audio) first.complete(Unit)

@@ -21,10 +21,21 @@ internal class VoiceLibraryActions(private val environment: PluginEnvironment, p
         suspend fun command(operation: VoiceOperation, metadata: VoicePackMetadata? = null) =
             broker.command(owner, VoiceCommand(operation, packId = id, metadata = metadata, voiceId = entry.pack.voiceIds.firstOrNull()))
         return when (parts[0]) {
+            "pack-settings" -> packSettingsControls(entry)
+            "pack-setting" -> {
+                updatePackSetting(entry, decodeId(parts[3]), context.inputs["value"], broker)
+                PluginOutcome.NoAction
+            }
+            "pack-settings-reset" -> {
+                val values = org.json.JSONObject()
+                entry.pack.parameters.forEach { values.put(it.id, it.defaultValue) }
+                broker.command(owner, VoiceCommand(VoiceOperation.UPDATE_PARAMETERS, packId = id, value = values.toString()))
+                packSettingsControls(pages.entries().first { it.key == entry.key })
+            }
             "pack" -> PluginOutcome.OpenPage(action)
             "pack-use" -> {
                 val voice = settings.voice?.takeIf { it in entry.pack.voiceIds } ?: entry.provider.info.selectedVoiceId?.takeIf { it in entry.pack.voiceIds } ?: entry.pack.voiceIds.firstOrNull()
-                if (owner == SYSTEM_PROVIDER) { settings.provider = null; settings.voice = null }
+                if (owner == SYSTEM_PROVIDER) { settings.provider = null; settings.voice = null; settings.systemVoice = null }
                 else { if (entry.provider.info.managesVoices && voice != null) broker.command(owner, VoiceCommand(VoiceOperation.SELECT, voiceId = voice)); settings.provider = owner; settings.voice = voice }
                 settings.save(); PluginOutcome.RefreshUi
             }

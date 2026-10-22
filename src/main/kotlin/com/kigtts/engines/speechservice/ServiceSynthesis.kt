@@ -10,7 +10,7 @@ import kotlinx.coroutines.flow.*
 internal class ServiceSynthesis(private val settings: ServiceSettings, private val broker: SpeechBroker,
     private val system: TtsEngine) : TtsEngine {
     private val routing = ServiceRouting(settings, broker, system)
-    override val info get() = TtsInfo(role = TtsRole.SERVICE, selectedVoiceId = if (settings.provider == null) settings.systemVoice else settings.voice, supportsControl = true)
+    override val info get() = TtsInfo(role = TtsRole.SERVICE, selectedVoiceId = if (settings.provider == null) null else settings.voice, supportsControl = true)
     fun settingsChanged(automaticRead: Boolean? = null) = routing.changed(automaticRead)
     override suspend fun control(command: TtsControl) { routing.control(command) }
     override suspend fun close() = routing.close()
@@ -19,7 +19,7 @@ internal class ServiceSynthesis(private val settings: ServiceSettings, private v
         val provider = routing.begin()
         if (provider == null) {
             routing.fallback()
-            system.synthesize(request.copy(voiceId = settings.systemVoice, rate = (request.rate * settings.rate).coerceIn(.25f, 4f))).collect { emit(it) }
+            system.synthesize(request.copy(voiceId = null, rate = (request.rate * settings.rate).coerceIn(.25f, 4f))).collect { emit(it) }
             return@flow
         }
         emit(SynthesisEvent.Started)
@@ -41,7 +41,7 @@ internal class ServiceSynthesis(private val settings: ServiceSettings, private v
                 if (audioSent) throw error
                 routing.fallback()
                 system.synthesize(request.copy(text = request.text.substring(offset),
-                    voiceId = settings.systemVoice,
+                    voiceId = null,
                     rate = (request.rate * settings.rate).coerceIn(.25f, 4f))).collect { if (it != SynthesisEvent.Started) emit(it) }
                 return@flow
             }

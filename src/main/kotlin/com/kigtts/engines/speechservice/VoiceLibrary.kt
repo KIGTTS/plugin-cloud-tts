@@ -34,7 +34,7 @@ internal data class PackEntry(val provider: TtsProvider, val pack: VoicePackInfo
 }
 internal const val SYSTEM_PROVIDER = "@system"
 internal fun voicePacks(providers: List<TtsProvider>): List<PackEntry> = providers.flatMap { provider ->
-    val packs = if (provider.pluginId == SYSTEM_PROVIDER) listOf(VoicePackInfo("system", VoicePackMetadata("系统声音", "使用设备已有的声音"), provider.info.voices.map { it.id }))
+    val packs = if (provider.pluginId == SYSTEM_PROVIDER) listOf(VoicePackInfo("system", VoicePackMetadata("系统默认声音", "系统语音合成"), emptyList()))
         else provider.info.packs.ifEmpty { provider.info.voices.groupBy { it.packId ?: it.id }.map { (id, voices) ->
             VoicePackInfo(id, VoicePackMetadata(voices.first().packName ?: voices.first().name, voices.first().description), voices.map { it.id })
         } }

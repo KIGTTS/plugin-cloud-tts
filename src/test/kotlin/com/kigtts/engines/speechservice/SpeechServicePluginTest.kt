@@ -68,9 +68,35 @@ class SpeechServicePluginTest {
         val broker = Broker(); val environment = environment(broker)
         ServiceSettings(environment.storage).apply { provider = "test.provider"; voice = "voice"; systemVoice = "old.system.voice"; save() }
         val service = SpeechServicePlugin().apply { attach(environment) }
-        assertEquals(PluginOutcome.OpenPage("voices/1"), service.execute("sounds/1", PluginContext("", "")))
+        assertEquals(PluginOutcome.OpenPage("packs"), service.execute("sounds/1", PluginContext("", "")))
         service.execute("system-default", PluginContext("", ""))
         ServiceSettings(environment.storage).let { assertNull(it.provider); assertNull(it.voice); assertNull(it.systemVoice) }
+        service.tts.close()
+    }
+    @Test fun rateUsesSliderAndPackSettingsAppearForTheSelectedVoiceAndInItsMenu() = runBlocking {
+        val spec = VoiceParameter("noise_scale", "音色变化", .6f, 0f, 2f, .667f)
+        val broker = Broker().apply { info = info.copy(packs = listOf(VoicePackInfo("pack", VoicePackMetadata("我的声音"),
+            listOf("voice"), parameters = listOf(spec)))) }
+        val environment = environment(broker)
+        ServiceSettings(environment.storage).apply { provider = "test.provider"; voice = "voice"; save() }
+        val service = SpeechServicePlugin().apply { attach(environment) }
+        val manager = service.page("manager", PluginContext("", ""))!!.blocks.filterIsInstance<PageBlock.Group>()
+        val parameters = manager.single { it.title == "我的声音" }
+        val slider = parameters.children.filterIsInstance<PageBlock.Slider>().single().control
+        assertEquals(.6f, slider.value); assertEquals(2f, slider.max)
+        service.execute(slider.actionId, PluginContext("", "", inputs = mapOf("value" to "0.9")))
+        assertEquals(VoiceOperation.UPDATE_PARAMETERS, broker.commands.single().operation)
+        assertEquals("pack", broker.commands.single().packId)
+        assertEquals(.9, org.json.JSONObject(broker.commands.single().value!!).getDouble("noise_scale"), .001)
+        assertTrue(runCatching { service.execute(slider.actionId, PluginContext("", "", inputs = mapOf("value" to "9"))) }.isFailure)
+        assertEquals(1, broker.commands.size)
+        val rate = (service.execute("rate", PluginContext("", "")) as PluginOutcome.Controls).controls.single() as PluginControl.Slider
+        assertEquals(.25f, rate.min); assertEquals(4f, rate.max)
+        service.execute(rate.actionId, PluginContext("", "", inputs = mapOf("value" to "1.5")))
+        assertEquals(1.5f, ServiceSettings(environment.storage).rate)
+        val packPage = service.page("pack/${encoded("test.provider")}/${encoded("pack")}", PluginContext("", ""))!!
+        val controls = service.execute(packPage.management!!.items.single().actions.single().id, PluginContext("", "")) as PluginOutcome.Controls
+        assertEquals(slider.actionId, controls.controls.single().actionId)
         service.tts.close()
     }
 }
