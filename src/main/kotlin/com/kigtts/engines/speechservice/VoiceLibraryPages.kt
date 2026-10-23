@@ -21,16 +21,21 @@ internal class VoiceLibraryPages(private val settings: ServiceSettings, private 
             return PluginPage(id, "语音包管理", listOf(PageBlock.Actions(importers)),
                 ManagementList("voice-packs", visible().map { entry ->
                     val pack = entry.pack; val pinned = library.pinned(entry.key, pack.metadata.pinned)
-                    val actions = mutableListOf(PageAction(packAction("pack", entry), "详细信息", PluginIcon.INFO),
-                        PageAction(packAction("pack-pin", entry), if (pinned) "取消置顶" else "置顶", PluginIcon.PIN))
+                    val actions = mutableListOf(PageAction(packAction("pack-pin", entry), if (pinned) "取消置顶" else "置顶", PluginIcon.PIN),
+                        PageAction(packAction("pack", entry), "详细信息", PluginIcon.INFO))
+                    if (pack.parameters.isNotEmpty() && entry.provider.enabled)
+                        actions += PageAction(packAction("pack-settings", entry), "音频设置", PluginIcon.SETTINGS)
                     if (pack.exportable && entry.provider.enabled) actions += PageAction(packAction("pack-export", entry), "导出语音包", PluginIcon.EXPORT)
-                    if (pack.deletable && entry.provider.enabled) actions += PageAction(packAction("pack-delete", entry), "删除语音包", PluginIcon.CLOSE)
+                    if (pack.deletable && entry.provider.enabled) actions += PageAction(packAction("pack-delete", entry), "删除语音包", PluginIcon.CLOSE, symbol = "delete")
                     ManagementItem(entry.key, pack.metadata.name,
-                        if (entry.provider.pluginId == SYSTEM_PROVIDER) "系统语音合成" else entry.provider.name + (if (entry.provider.enabled) "" else " · 引擎已停用") + if (pack.metadata.remark.isBlank()) "" else " · ${pack.metadata.remark}", PluginIcon.SPEAKER,
+                        if (entry.provider.pluginId == SYSTEM_PROVIDER) "系统语音合成" else listOfNotNull(
+                            pack.metadata.remark.takeIf { it.isNotBlank() }, "引擎已停用".takeUnless { entry.provider.enabled }).joinToString(" · "), PluginIcon.SPEAKER,
                         pack.avatarPath?.let { PluginResource(it, entry.provider.pluginId) },
                         selected = if (entry.provider.pluginId == SYSTEM_PROVIDER) settings.provider == null
                             else settings.provider == entry.provider.pluginId && settings.voice in pack.voiceIds,
-                        pinned = pinned, group = if (pinned) "pinned" else "normal", primaryAction = if (entry.provider.enabled) packAction("pack-use", entry) else packAction("pack", entry), actions = actions)
+                        pinned = pinned, group = if (pinned) "pinned" else "normal", primaryAction = if (entry.provider.enabled) packAction("pack-use", entry) else packAction("pack", entry), actions = actions,
+                        badges = listOf(if (entry.provider.pluginId == SYSTEM_PROVIDER) "系统" else entry.provider.name.take(32)),
+                        selection = ManagementSelection(packAction("pack-use", entry), entry.provider.enabled))
                 }, "pack-order", "此引擎还没有语音包", filters))
         }
         if (!id.startsWith("pack/")) return null
@@ -50,6 +55,7 @@ internal class VoiceLibraryPages(private val settings: ServiceSettings, private 
             ManagementItem(voice.id, voice.name, voice.language, PluginIcon.SPEAKER,
                 selected = settings.provider == owner && settings.voice == voice.id,
                 primaryAction = "voice/${encodeId(owner)}/${encodeId(voice.id)}",
+                selection = ManagementSelection("voice/${encodeId(owner)}/${encodeId(voice.id)}"),
                 actions = if (pack.parameters.isEmpty()) emptyList() else listOf(PageAction(packAction("pack-settings", entry), "音频设置", PluginIcon.SETTINGS)))
         }
         return PluginPage(id, pack.metadata.name, (if (pack.metadata.remark.isBlank()) emptyList() else listOf(PageBlock.Text(pack.metadata.remark))) +

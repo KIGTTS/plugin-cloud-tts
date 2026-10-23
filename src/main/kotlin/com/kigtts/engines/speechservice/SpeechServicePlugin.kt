@@ -8,7 +8,7 @@ import java.util.Base64
 
 class SpeechServicePlugin : KigPlugin {
     override val descriptor = PluginDescriptor("service.speech-synthesis", "语音合成服务",
-        "选择朗读声音，管理语音包", version = "0.8.1", license = "GPL-3.0-only")
+        "选择朗读声音，管理语音包", version = "0.8.2", license = "GPL-3.0-only")
     private lateinit var environment: AndroidPluginEnvironment
     private lateinit var settings: ServiceSettings
     private lateinit var broker: SpeechBroker

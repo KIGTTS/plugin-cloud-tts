@@ -23,6 +23,11 @@ class VoiceLibraryTest {
         val page = pages.page("packs")!!
         assertEquals(2, page.management!!.items.size)
         assertTrue(page.management!!.items.last().subtitle.contains("已停用"))
+        assertEquals(listOf("first.engine"), page.management!!.items.first().badges)
+        assertEquals("备注", page.management!!.items.first().subtitle)
+        assertTrue(page.management!!.items.first().selection!!.enabled)
+        assertFalse(page.management!!.items.last().selection!!.enabled)
+        assertEquals(page.management!!.items.first().primaryAction, page.management!!.items.first().selection!!.action)
         assertEquals(2, pages.page("pack/${encodeId("first.engine")}/${encodeId("pack")}")!!.management!!.items.size)
     }
     @Test fun crossEngineReorderAndFilteredReorderPersistWithoutMovingHiddenEntries() {

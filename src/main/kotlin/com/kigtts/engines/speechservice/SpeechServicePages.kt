@@ -29,13 +29,14 @@ internal class SpeechServicePages(private val settings: ServiceSettings, private
         val sources = providers().filter { it.enabled && it.info.availability == EngineAvailability.READY }
             .sortedBy { if (it.pluginId == settings.provider) 0 else 1 }
         val default = ManagementItem("system-default", "系统默认声音", "系统语音合成", icon = PluginIcon.SPEAKER,
-            selected = settings.provider == null, group = "系统声音", primaryAction = "system-default")
+            selected = settings.provider == null, group = "系统声音", primaryAction = "system-default", selection = ManagementSelection("system-default"))
         val items = sources.flatMap { source ->
             if (source.pluginId == SYSTEM_PROVIDER) listOf(default) else source.info.voices.distinctBy { it.id }.map { voice ->
                 ManagementItem("${source.pluginId}/${voice.id}", voice.name, languageName(voice.language), PluginIcon.SPEAKER,
                     selected = settings.provider == source.pluginId && settings.voice == voice.id,
                     group = source.name,
-                    primaryAction = "voice/${encodeId(source.pluginId)}/${encodeId(voice.id)}")
+                    primaryAction = "voice/${encodeId(source.pluginId)}/${encodeId(voice.id)}",
+                    selection = ManagementSelection("voice/${encodeId(source.pluginId)}/${encodeId(voice.id)}"))
             }
         }.ifEmpty { listOf(default) }
         val page = (id.substringAfter('/', "0").toIntOrNull() ?: 0).coerceIn(0, (items.size - 1) / 24)
