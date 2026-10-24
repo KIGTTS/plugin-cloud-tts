@@ -15,5 +15,3 @@ rootProject.name = "cloud-tts"
 include(":plugin-api", ":plugin-android-api")
 project(":plugin-api").projectDir = file(".sdk/plugin-api")
 project(":plugin-android-api").projectDir = file(".sdk/plugin-android-api")
-include(":engine-plugins:tts-support")
-project(":engine-plugins:tts-support").projectDir = file(".tts-support")

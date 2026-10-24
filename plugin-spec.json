@@ -1,13 +1,17 @@
 {
   "id": "engine.cloud-tts",
   "name": "云端语音合成",
-  "version": "0.1.0",
-  "versionCode": 1,
+  "version": "0.1.1",
+  "versionCode": 2,
   "entryClass": "com.kigtts.engines.cloudtts.CloudTtsPlugin",
-  "apiVersion": 17,
+  "apiVersion": 28,
   "minSdk": 26,
   "runtime": "android-dex",
   "license": "GPL-3.0-only",
-  "capabilities": ["tts", "ui", "network", "voice-packs"]
+  "capabilities": [
+    "tts",
+    "ui",
+    "network",
+    "voice-packs"
+  ]
 }
-

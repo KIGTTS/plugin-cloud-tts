@@ -1,19 +1,18 @@
 # 云端语音合成
 
-为 KIGTTS 提供可选的云端语音合成接口。支持腾讯云、阿里云、Arzue、百度云和讯飞；每个服务商可以添加多个接口配置。
+在 KIGTTS 中使用腾讯云、阿里云、Azure、百度云或讯飞朗读文字。先添加账户，再创建语音包并加入需要的声音；语音包列表显示对应服务商。
 
-预设声音与克隆声音在声音包中分开标记。插件不会自动下载或填充服务商的全部声音，只有用户主动创建声音包并添加的声音才会出现在 KIGTTS 的语音包列表。
+预设声音与克隆声音分开管理。当前支持腾讯云已有克隆声音 ID 和 Azure 已部署的自定义声音；阿里云、百度云、讯飞暂提供预设声音。声音由你选择添加，不会自动把全部声音加入列表。
 
-API 密钥仅保存在插件自己的本地数据目录中，接口地址必须使用 HTTPS。插件不会在没有配置和选用声音时发起网络请求。
+具体接口、凭据及限制见 [协议说明](PROTOCOLS.md)。本轮已通过协议请求与页面回归，真实合成与声音可用性仍需使用有效账户验证。
 
 ## 构建
 
-需要 JDK17、Android SDK36、PowerShell7。克隆时获取固定版本的 plugin-sdk 和 tts-support 子模块。
+需要 JDK17、Android SDK36、PowerShell7。克隆时获取固定版本的 plugin-sdk 子模块。
 
 ```powershell
-./gradlew.bat testDebugUnitTest assembleDebug
+./gradlew.bat testDebugUnitTest assembleDebug collectPluginDependencies
 ./Package.ps1 -SigningKey /path/to/publisher-private.der -AndroidSdk /path/to/android-sdk
 ```
 
 许可：GPL-3.0-only，见 [LICENSE](LICENSE)。第三方许可见 [NOTICE.md](NOTICE.md)。
-

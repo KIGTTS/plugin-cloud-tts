@@ -1,80 +1,102 @@
 package com.kigtts.engines.cloudtts
 
 import com.kigtts.plugin.api.*
-import java.util.Base64
+import java.util.UUID
 
 class CloudTtsPlugin : KigPlugin {
-    override val descriptor = PluginDescriptor("engine.cloud-tts", "云端语音合成", "配置云端合成接口并按需添加预设或克隆声音", version = "0.1.0", license = "GPL-3.0-only")
+    override val descriptor = PluginDescriptor("engine.cloud-tts", "云端语音合成", "使用云端声音朗读文字", version = "0.1.1", license = "GPL-3.0-only")
     private lateinit var settings: CloudTtsSettings
     private lateinit var engine: CloudTtsEngine
+    private val drafts = linkedMapOf<String, CloudVoiceDraft>()
     override val tts: TtsEngine get() = engine
     override val voiceManager: VoiceManager get() = manager
     private val manager = object : VoiceManager {
-        override suspend fun command(command: VoiceCommand): PluginOutcome = when (command.operation) {
-            VoiceOperation.SELECT -> { command.voiceId?.let { settings.selectVoice(it) }; PluginOutcome.RefreshUi }
-            VoiceOperation.DELETE -> { command.voiceId?.let { settings.removeVoice(it) }; PluginOutcome.RefreshUi }
-            VoiceOperation.RENAME -> {
-                val voiceId = command.voiceId
-                val value = command.value
-                if (voiceId != null && value != null) settings.renameVoice(voiceId, value)
-                PluginOutcome.RefreshUi
+        override suspend fun command(command: VoiceCommand): PluginOutcome = outcome {
+            when (command.operation) {
+                VoiceOperation.SELECT -> { settings.selectVoice(requireNotNull(command.voiceId) { "请选择声音" }); PluginOutcome.RefreshUi }
+                VoiceOperation.DELETE -> {
+                    if (command.packId != null) settings.removePack(command.packId!!) else settings.removeVoice(requireNotNull(command.voiceId) { "请选择声音" })
+                    PluginOutcome.RefreshUi
+                }
+                VoiceOperation.RENAME -> {
+                    val name = requireNotNull(command.value) { "请输入名称" }
+                    if (command.packId != null) {
+                        val pack = pack(command.packId!!)
+                        settings.updatePack(pack.id, VoicePackMetadata(name, pack.remark, pack.pinned, pack.order))
+                    } else settings.renameVoice(requireNotNull(command.voiceId), name)
+                    PluginOutcome.RefreshUi
+                }
+                VoiceOperation.UPDATE_METADATA -> { settings.updatePack(requireNotNull(command.packId), requireNotNull(command.metadata)); PluginOutcome.RefreshUi }
+                VoiceOperation.SET_AVATAR -> { settings.setAvatar(requireNotNull(command.packId), requireNotNull(command.resourcePath)); PluginOutcome.RefreshUi }
+                VoiceOperation.REORDER -> { settings.reorderPacks(command.order); PluginOutcome.RefreshUi }
+                VoiceOperation.REFRESH -> PluginOutcome.RefreshUi
+                else -> PluginOutcome.Message("请在云端语音合成中管理账户和声音")
             }
-            VoiceOperation.REFRESH -> PluginOutcome.RefreshUi
-            else -> PluginOutcome.Message("该云端声音由配置页面管理")
         }
     }
     override suspend fun attach(environment: PluginEnvironment) { settings = CloudTtsSettings(environment.storage); engine = CloudTtsEngine(settings) }
     override val contributions = PluginContributions(settingsEntries = listOf(
-        SettingsEntry("cloud-tts", "云端语音合成", "settings", PluginIcon.SPEAKER, "audio", "音频", "按需添加预设或克隆声音", 40)))
-    override fun page(pageId: String, context: PluginContext): PluginPage? {
-        if (pageId != "settings" && !pageId.startsWith("provider/")) return null
-        if (pageId.startsWith("provider/")) return providerPage(decode(pageId.substringAfter('/')))
-        val blocks = mutableListOf<PageBlock>(PageBlock.Text("云端语音合成", true), PageBlock.Notice("只有你主动加入的声音会出现在语音包列表，预设声音与克隆声音分开标记。"), PageBlock.Actions(listOf(PageAction("add-provider", "添加合成服务", PluginIcon.ADD), PageAction("add-pack", "创建声音包", PluginIcon.ADD))))
-        settings.providers().forEach { c -> blocks += PageBlock.Group("${c.name} · ${c.provider.label}", listOf(PageBlock.Text(if (c.configured) "已配置" else "待配置"), PageBlock.Toggle("启用此接口", c.enabled, "toggle/${encode(c.id)}", icon = PluginIcon.SPEAKER), PageBlock.Actions(listOf(PageAction("provider/${encode(c.id)}", "配置接口", PluginIcon.SETTINGS), PageAction("select-provider/${encode(c.id)}", "选用", PluginIcon.STAR), PageAction("remove-provider/${encode(c.id)}", "移除", PluginIcon.CLOSE))))) }
-        settings.packList().forEach { pack ->
-            val provider = settings.providers().firstOrNull { it.id == pack.providerId }
-            val children = mutableListOf<PageBlock>(PageBlock.Text(if (pack.remark.isBlank()) "手动添加的声音包" else pack.remark), PageBlock.Actions(listOf(PageAction("add-voice/${encode(pack.id)}", "添加声音", PluginIcon.ADD))))
-            settings.voiceList().filter { it.packId == pack.id }.forEach { voice ->
-                val description = voice.language + if (voice.description.isBlank()) "" else " · ${voice.description}"
-                val actions = listOf(PageAction("select-voice/${encode(voice.id)}", if (settings.currentVoice()?.id == voice.id) "当前声音" else "使用声音", PluginIcon.SPEAKER), PageAction("remove-voice/${encode(voice.id)}", "移除", PluginIcon.CLOSE))
-                children += PageBlock.Group("${voice.name} · ${if (voice.kind == CloudVoiceKind.CLONE) "克隆" else "预设"}", listOf(PageBlock.Text(description), PageBlock.Actions(actions)))
-            }
-            blocks += PageBlock.Group("${pack.name} · ${provider?.provider?.label ?: "服务商"}", children)
-        }
-        return PluginPage(pageId, "云端语音合成", blocks)
-    }
-    private fun providerPage(id: String): PluginPage {
-        val c = settings.providers().firstOrNull { it.id == id } ?: return PluginPage("provider/$id", "合成服务", listOf(PageBlock.Notice("服务不存在")))
-        fun input(label: String, field: String, value: String, secret: Boolean = false) = PageBlock.Input(label, value, "save/${encode(c.id)}/$field", secret = secret, icon = PluginIcon.SETTINGS)
-        return PluginPage("provider/$id", c.name, listOf(PageBlock.Text(c.provider.label, true), input("名称", "name", c.name), input("接口地址", "endpoint", c.endpoint), input("API Key", "apiKey", c.apiKey, true), input("API Secret", "apiSecret", c.apiSecret, true), input("应用 ID", "appId", c.appId), input("模型或接口版本", "model", c.model), PageBlock.Notice("接口地址必须使用 HTTPS；密钥保存在本机插件数据中。")))
-    }
-    override suspend fun execute(actionId: String, context: PluginContext): PluginOutcome {
+        SettingsEntry("cloud-tts", "云端语音合成", "settings", PluginIcon.SPEAKER, "audio", "音频", "管理云端账户和声音", 40)))
+    override fun page(pageId: String, context: PluginContext) = ttsSettingsPage(settings, drafts, pageId)
+    override suspend fun execute(actionId: String, context: PluginContext): PluginOutcome = outcome {
         val p = actionId.split('/')
-        return when (p[0]) {
+        fun id() = ttsDecode(requireNotNull(p.getOrNull(1)) { "此操作已失效" })
+        fun account() = settings.providers().firstOrNull { it.id == id() } ?: error("此账户已移除")
+        fun value() = context.inputs["value"]?.trim() ?: error("请重新打开设置项并保存")
+        fun draft() = drafts[id()] ?: error("声音草稿已失效，请重新添加")
+        when (p[0]) {
+            "provider", "pack", "voice" -> { requireNotNull(page(actionId, context)); PluginOutcome.OpenPluginPage(descriptor.id, actionId) }
             "add-provider" -> if (p.size == 1) PluginOutcome.Menu("选择服务商", CloudTtsProvider.entries.map { PageAction("add-provider/${it.key}", it.label, PluginIcon.SPEAKER) })
-                else { settings.addProvider(CloudTtsProvider.of(p[1])); PluginOutcome.RefreshUi }
-            "toggle" -> { settings.toggleProvider(decode(p[1])); PluginOutcome.RefreshUi }
-            "select-provider" -> { settings.selectProvider(decode(p[1])); PluginOutcome.RefreshUi }
-            "remove-provider" -> { settings.removeProvider(decode(p[1])); PluginOutcome.RefreshUi }
-            "save" -> { settings.updateProvider(decode(p[1]), p.getOrNull(2) ?: error("缺少设置项"), context.inputs["value"].orEmpty()); PluginOutcome.RefreshUi }
-            "add-pack" -> {
-                val provider = settings.currentProvider() ?: return PluginOutcome.Message("请先添加并配置一个合成服务")
-                PluginOutcome.TextInput("声音包名称", "new-pack/${encode(provider.id)}")
+                else { val next = settings.addProvider(CloudTtsProvider.of(p[1])); PluginOutcome.OpenPluginPage(descriptor.id, "provider/${ttsEncode(next.id)}") }
+            "toggle" -> { settings.toggleProvider(id()); PluginOutcome.RefreshUi }
+            "select-provider" -> { settings.selectProvider(id()); PluginOutcome.RefreshUi }
+            "remove-provider" -> { val c = account(); PluginOutcome.Confirm("移除此账户？", "${c.name}及其语音包和声音将被移除", PageAction("remove-provider-confirm/${ttsEncode(c.id)}", "移除", PluginIcon.CLOSE, symbol = "delete")) }
+            "remove-provider-confirm" -> { settings.removeProvider(id()); PluginOutcome.OpenPluginPage(descriptor.id, "settings") }
+            "edit" -> {
+                val c = account(); val field = ttsFields(c).firstOrNull { it.key == p.getOrNull(2) } ?: error("此设置项已失效")
+                PluginOutcome.TextInput(field.label, "save/${ttsEncode(c.id)}/${field.key}", field.value, secret = field.secret)
             }
-            "new-pack" -> { val provider = settings.providers().first { it.id == decode(p[1]) }; settings.createPack(provider.id, context.inputs["value"].orEmpty().trim().ifBlank { "我的声音包" }); PluginOutcome.RefreshUi }
+            "save" -> { settings.updateProvider(id(), requireNotNull(p.getOrNull(2)), value()); PluginOutcome.RefreshUi }
+            "add-pack" -> { val c = account(); PluginOutcome.TextInput("语音包名称", "new-pack/${ttsEncode(c.id)}") }
+            "new-pack" -> { val c = account(); val pack = settings.createPack(c.id, value()); PluginOutcome.OpenPluginPage(descriptor.id, "pack/${ttsEncode(pack.id)}") }
+            "remove-pack" -> { val pack = pack(id()); PluginOutcome.Confirm("移除此语音包？", pack.name, PageAction("remove-pack-confirm/${ttsEncode(pack.id)}", "移除", PluginIcon.CLOSE, symbol = "delete")) }
+            "remove-pack-confirm" -> { val pack = pack(id()); settings.removePack(pack.id); PluginOutcome.OpenPluginPage(descriptor.id, "provider/${ttsEncode(pack.providerId)}") }
             "add-voice" -> {
-                val pack = settings.packList().firstOrNull { it.id == decode(p[1]) } ?: return PluginOutcome.Message("声音包不存在")
-                PluginOutcome.TextInput("声音名称", "new-voice-name/${encode(pack.id)}")
+                val pack = pack(id()); val provider = settings.providers().first { it.id == pack.providerId }
+                val options = mutableListOf(PageAction("new-voice/${ttsEncode(pack.id)}/PRESET", "预设声音", PluginIcon.SPEAKER, symbol = "volume_up"))
+                if (provider.provider in listOf(CloudTtsProvider.TENCENT, CloudTtsProvider.AZURE)) options += PageAction("new-voice/${ttsEncode(pack.id)}/CLONE", "克隆声音", PluginIcon.ROBOT2, symbol = "record_voice_over")
+                PluginOutcome.Menu("添加声音", options)
             }
-            "new-voice-name" -> PluginOutcome.TextInput("语言代码", "new-voice-language/${p[1]}/${encode(context.inputs["value"].orEmpty())}", "zh-CN")
-            "new-voice-language" -> PluginOutcome.TextInput("服务商声音 ID", "new-voice-id/${p[1]}/${p[2]}/${encode(context.inputs["value"].orEmpty())}")
-            "new-voice-id" -> PluginOutcome.Menu("声音类型", listOf(PageAction("new-voice-kind/${p[1]}/${p[2]}/${p[3]}/PRESET", "预设声音", PluginIcon.SPEAKER), PageAction("new-voice-kind/${p[1]}/${p[2]}/${p[3]}/CLONE", "克隆声音", PluginIcon.ROBOT2)))
-            "new-voice-kind" -> { val pack = settings.packList().first { it.id == decode(p[1]) }; val provider = pack.providerId; val name = decode(p[2]); val language = decode(p[3]); val remoteId = decode(p[4]); settings.addVoice(pack.id, provider, name, language, CloudVoiceKind.valueOf(p[5]), remoteId); PluginOutcome.RefreshUi }
-            "select-voice" -> { settings.selectVoice(decode(p[1])); PluginOutcome.RefreshUi }
-            "remove-voice" -> { settings.removeVoice(decode(p[1])); PluginOutcome.RefreshUi }
-            else -> PluginOutcome.Message("未知语音合成操作")
+            "new-voice" -> {
+                val pack = pack(id()); val kind = CloudVoiceKind.valueOf(requireNotNull(p.getOrNull(2)))
+                val provider = settings.providers().first { it.id == pack.providerId }
+                require(kind != CloudVoiceKind.CLONE || provider.provider in listOf(CloudTtsProvider.TENCENT, CloudTtsProvider.AZURE)) { "此接口暂不支持克隆声音" }
+                if (drafts.size >= 8) drafts.remove(drafts.keys.first())
+                val draft = CloudVoiceDraft(UUID.randomUUID().toString(), pack.id, kind); drafts[draft.id] = draft
+                PluginOutcome.OpenPluginPage(descriptor.id, "draft/${ttsEncode(draft.id)}")
+            }
+            "edit-draft" -> {
+                val draft = draft(); val field = draft.fields().firstOrNull { it.key == p.getOrNull(2) } ?: error("此设置项已失效")
+                PluginOutcome.TextInput(field.label, "save-draft/${ttsEncode(draft.id)}/${field.key}", field.value)
+            }
+            "save-draft" -> { val draft = draft(); val text = value(); require(text.length <= 512) { "内容过长" }; drafts[draft.id] = draft.update(requireNotNull(p.getOrNull(2)), text); PluginOutcome.RefreshUi }
+            "save-voice" -> {
+                val draft = draft(); val pack = pack(draft.packId)
+                settings.addVoice(pack.id, pack.providerId, draft.name, draft.language, draft.kind, draft.remoteId, draft.description)
+                drafts.remove(draft.id); PluginOutcome.OpenPluginPage(descriptor.id, "pack/${ttsEncode(pack.id)}")
+            }
+            "cancel-voice" -> { val draft = draft(); drafts.remove(draft.id); PluginOutcome.OpenPluginPage(descriptor.id, "pack/${ttsEncode(draft.packId)}") }
+            "select-voice" -> { settings.selectVoice(id()); PluginOutcome.RefreshUi }
+            "rename-voice" -> { val voice = settings.voiceList().first { it.id == id() }; PluginOutcome.TextInput("声音名称", "save-voice-name/${ttsEncode(voice.id)}", voice.name) }
+            "save-voice-name" -> { settings.renameVoice(id(), value()); PluginOutcome.RefreshUi }
+            "remove-voice" -> { val voice = settings.voiceList().first { it.id == id() }; PluginOutcome.Confirm("移除此声音？", voice.name, PageAction("remove-voice-confirm/${ttsEncode(voice.id)}", "移除", PluginIcon.CLOSE, symbol = "delete")) }
+            "remove-voice-confirm" -> { settings.removeVoice(id()); PluginOutcome.RefreshUi }
+            else -> PluginOutcome.Message("此操作已失效，请重新打开页面")
         }
     }
-    private fun encode(value: String) = Base64.getUrlEncoder().withoutPadding().encodeToString(value.toByteArray())
-    private fun decode(value: String) = String(Base64.getUrlDecoder().decode(value))
+    private fun pack(id: String) = settings.packList().firstOrNull { it.id == id } ?: error("此语音包已移除")
+    private inline fun outcome(block: () -> PluginOutcome): PluginOutcome = try { block() }
+        catch (error: IllegalArgumentException) { PluginOutcome.Message(error.message ?: "请检查账户设置") }
+        catch (error: IllegalStateException) { PluginOutcome.Message(error.message ?: "此操作已失效，请重新打开页面") }
+        catch (_: NoSuchElementException) { PluginOutcome.Message("此条目已移除，请返回重新选择") }
 }
