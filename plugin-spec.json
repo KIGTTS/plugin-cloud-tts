@@ -1,16 +1,13 @@
 {
-  "id": "service.speech-synthesis",
-  "name": "语音合成服务",
-  "version": "0.8.2",
-  "versionCode": 13,
-  "entryClass": "com.kigtts.engines.speechservice.SpeechServicePlugin",
-  "apiVersion": 24,
+  "id": "engine.cloud-tts",
+  "name": "云端语音合成",
+  "version": "0.1.0",
+  "versionCode": 1,
+  "entryClass": "com.kigtts.engines.cloudtts.CloudTtsPlugin",
+  "apiVersion": 17,
   "minSdk": 26,
   "runtime": "android-dex",
   "license": "GPL-3.0-only",
-  "capabilities": [
-    "tts",
-    "ui",
-    "speech-service"
-  ]
+  "capabilities": ["tts", "ui", "network", "voice-packs"]
 }
+
