@@ -4,7 +4,7 @@ import com.kigtts.plugin.api.*
 import java.util.UUID
 
 class CloudTtsPlugin : KigPlugin {
-    override val descriptor = PluginDescriptor("engine.cloud-tts", "云端语音合成", "使用云端声音朗读文字", version = "0.1.1", license = "GPL-3.0-only")
+    override val descriptor = PluginDescriptor("engine.cloud-tts", "云端语音合成", "使用云端声音朗读文字", version = "0.1.2", license = "GPL-3.0-only")
     private lateinit var settings: CloudTtsSettings
     private lateinit var engine: CloudTtsEngine
     private val drafts = linkedMapOf<String, CloudVoiceDraft>()
