@@ -5,7 +5,7 @@ import java.util.UUID
 
 class CloudTtsPlugin : KigPlugin {
     override val descriptor = PluginDescriptor("engine.cloud-tts", "云端语音合成", "使用云端声音朗读文字", version = "0.1.3", license = "GPL-3.0-only")
-    override val localization = PluginLocalization("zh-CN", listOf("zh-CN", "en", "ko"))
+    override val localization = PluginLocalization("zh-CN", listOf("zh-CN", "en", "ko", "ja"))
     private var strings = PluginStrings(emptyMap())
     private lateinit var environment: PluginEnvironment
 

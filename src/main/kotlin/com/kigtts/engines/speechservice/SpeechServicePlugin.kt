@@ -9,6 +9,8 @@ import java.util.Base64
 class SpeechServicePlugin : KigPlugin {
     override val descriptor = PluginDescriptor("service.speech-synthesis", "语音合成服务",
         "选择朗读声音，管理语音包", version = "0.8.2", license = "GPL-3.0-only")
+    override val localization = PluginLocalization("zh-CN", listOf("zh-CN", "zh-CN-x-casual", "en", "ko", "ja"))
+    private var strings = PluginStrings(emptyMap())
     private lateinit var environment: AndroidPluginEnvironment
     private lateinit var settings: ServiceSettings
     private lateinit var broker: SpeechBroker
@@ -20,6 +22,7 @@ class SpeechServicePlugin : KigPlugin {
     override val tts: TtsEngine get() = facade
     override suspend fun attach(environment: PluginEnvironment) {
         this.environment = environment as AndroidPluginEnvironment
+        strings = PluginStrings.fromAssets(environment.assets)
         broker = requireNotNull(environment.speechBroker) { "宿主未授予语音合成服务能力" }
         settings = ServiceSettings(environment.storage)
         system = SystemSpeechEngine(this.environment)
@@ -29,16 +32,18 @@ class SpeechServicePlugin : KigPlugin {
         libraryActions = VoiceLibraryActions(environment, settings, library, libraryPages, broker)
         settingsPages = SpeechServicePages(settings, ::providers)
     }
-    override val contributions = PluginContributions(settingsEntries = listOf(
-        SettingsEntry("manager", "语音合成", "manager", PluginIcon.SPEAKER, "audio", "音频", "选择朗读声音", 10),
-        SettingsEntry("packs", "语音包", "packs", PluginIcon.SPEAKER, "audio", "音频", "管理已添加的声音", 20)))
+    private fun labels(locale: String): (String, String) -> String = { key, fallback -> strings.text(key, locale, fallback = fallback) }
+    override val contributions get() = contributions(PluginContext("", ""))
     override fun contributions(context: PluginContext): PluginContributions {
+        val copy = labels(context.locale)
         facade.settingsChanged(context.ttsPluginId?.let { it == descriptor.id && context.automaticRead })
-        return contributions
+        return PluginContributions(settingsEntries = listOf(
+            SettingsEntry("manager", copy("entry.title", "语音合成"), "manager", PluginIcon.SPEAKER, "audio", copy("action.audio", "音频"), copy("entry.summary", "选择朗读声音"), 10),
+            SettingsEntry("packs", copy("entry.packs", "语音包"), "packs", PluginIcon.SPEAKER, "audio", copy("action.audio", "音频"), copy("entry.packs_summary", "管理已添加的声音"), 20)))
     }
     override fun page(pageId: String, context: PluginContext): PluginPage? {
         libraryPages.page(pageId)?.let { return it }
-        settingsPages.page(pageId, context.ttsPluginId == descriptor.id)?.let { return it }
+        settingsPages.page(pageId, context.ttsPluginId == descriptor.id, labels(context.locale))?.let { return it }
         if (pageId.startsWith("provider/")) {
             val parts = pageId.split('/')
             val id = decode(parts[1]); val page = parts.getOrNull(2)?.toIntOrNull() ?: 0
