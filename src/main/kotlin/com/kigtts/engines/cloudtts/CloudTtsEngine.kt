@@ -4,10 +4,11 @@ import com.kigtts.plugin.api.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.flowOn
 
 internal class CloudTtsEngine(private val settings: CloudTtsSettings,
-    private val protocols: CloudTtsProtocols = CloudTtsProtocols()) : TtsEngine {
+    private val protocols: CloudTtsProtocols = CloudTtsProtocols(), private val copy: SpeechCopy = defaultSpeechCopy) : TtsEngine {
     override val info: TtsInfo get() = settings.engineInfo()
 
     override fun synthesize(request: TtsRequest): Flow<SynthesisEvent> = flow {
@@ -29,6 +30,9 @@ internal class CloudTtsEngine(private val settings: CloudTtsSettings,
             if (text.isNotBlank()) emit(SynthesisEvent.Audio(protocols.synthesize(provider, voice, request.copy(text = text))))
         }
         emit(SynthesisEvent.Finished())
+    }.catch { error ->
+        if (error is EngineException) throw localizedEngineError(error, copy)
+        throw error
     }.flowOn(Dispatchers.IO)
     override suspend fun close() = protocols.close()
 }
